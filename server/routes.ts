@@ -22,26 +22,26 @@ export async function registerRoutes(
 
       const submission = await storage.createContactSubmission(validatedData);
 
-      let emailSent = false;
-      try {
-        emailSent = await sendContactEmail({
-          name: validatedData.name,
-          email: validatedData.email,
-          phone: validatedData.phone,
-          projectType: validatedData.projectType,
-          budget: validatedData.budget,
-          message: validatedData.message,
+      const sendResult = await sendContactEmail({
+        name: validatedData.name,
+        email: validatedData.email,
+        phone: validatedData.phone,
+        projectType: validatedData.projectType,
+        budget: validatedData.budget,
+        message: validatedData.message,
+      });
+
+      if (!sendResult.ok) {
+        console.error("Email not sent for submission id:", submission.id, "error:", sendResult.error || "unknown");
+        return res.status(502).json({
+          success: false,
+          message: "Submission saved but failed to send notification email",
+          details: sendResult.error ? String(sendResult.error).slice(0, 200) : undefined,
+          via: sendResult.via,
         });
-      } catch (sendErr) {
-        console.error("sendContactEmail threw an error:", sendErr);
       }
 
-      if (!emailSent) {
-        console.error("Email not sent for submission id:", submission.id);
-        return res.status(500).json({ success: false, message: "Submission saved but failed to send notification email" });
-      }
-
-      res.status(201).json({ success: true, id: submission.id });
+      res.status(201).json({ success: true, id: submission.id, via: sendResult.via });
     } catch (error) {
       if (error instanceof z.ZodError) {
         res.status(400).json({ error: "Invalid form data", details: error.errors });
@@ -132,6 +132,27 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Estimate error:", error);
       res.status(500).json({ error: "Failed to calculate estimate" });
+    }
+  });
+
+  // Non-destructive email configuration health check (no secrets returned)
+  app.get("/api/_email_status", async (_req, res) => {
+    try {
+      const smtpUser = process.env.SMTP_EMAIL || process.env.SMTP_USER || process.env.GMAIL_USER;
+      const smtpPass = process.env.SMTP_PASSWORD || process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
+      const sendgridApiKey = !!process.env.SENDGRID_API_KEY;
+      const host = process.env.SMTP_HOST || "smtp.gmail.com";
+      const port = Number(process.env.SMTP_PORT || "587");
+
+      res.json({
+        smtpConfigured: !!(smtpUser && smtpPass),
+        smtpHost: host,
+        smtpPort: port,
+        sendgridConfigured: sendgridApiKey,
+      });
+    } catch (err) {
+      console.error("_email_status error:", err);
+      res.status(500).json({ ok: false });
     }
   });
 

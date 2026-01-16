@@ -61,11 +61,12 @@ export function ContactSection() {
         description: "I'll get back to you within 24 hours.",
       });
     },
-    onError: () => {
-      console.error("Contact API error");
+    onError: (err: any) => {
+      console.error("Contact API error", err);
+      const message = err?.message || "Please try again or email me directly.";
       toast({
         title: "Something went wrong",
-        description: "Please try again or email me directly.",
+        description: message,
         variant: "destructive",
       });
     },

@@ -17,7 +17,9 @@ function getEnvFlag(name: string) {
   return v === "true" || v === "1";
 }
 
-export async function sendContactEmail(data: ContactEmailData): Promise<boolean> {
+export type SendResult = { ok: boolean; via?: "smtp" | "sendgrid"; error?: string };
+
+export async function sendContactEmail(data: ContactEmailData): Promise<SendResult> {
   // Support multiple env var names (SMTP_* preferred, fallback to GMAIL_*)
   const smtpUser = process.env.SMTP_EMAIL || process.env.SMTP_USER || process.env.GMAIL_USER;
   const smtpPass = process.env.SMTP_PASSWORD || process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
@@ -32,14 +34,14 @@ export async function sendContactEmail(data: ContactEmailData): Promise<boolean>
 
   if (!smtpUser || !smtpPass) {
     console.error(
-      "Email credentials not configured. Set SMTP_EMAIL and SMTP_PASSWORD (or GMAIL_USER/GMAIL_APP_PASSWORD) in Render environment."
+      "Email credentials not configured for SMTP. Will attempt SendGrid if configured."
     );
-    console.log("Contact form payload:", {
-      name: data.name,
-      email: data.email,
-      projectType: data.projectType,
-    });
-    return false;
+  }
+
+  if ((!smtpUser || !smtpPass) && !process.env.SENDGRID_API_KEY) {
+    console.error(
+      "No SMTP credentials AND no SENDGRID_API_KEY found in environment — emails cannot be sent until one is configured."
+    );
   }
 
   const transporter = nodemailer.createTransport({
@@ -84,21 +86,52 @@ This message was sent from your portfolio contact form.`.trim();
     text: emailContent,
   };
 
-  try {
-    // Verify transporter connection quickly (will throw if auth fails)
-    try {
-      await transporter.verify();
-      console.log("SMTP connection verified");
-    } catch (verifyErr: any) {
-      console.error("SMTP verify failed:", verifyErr && verifyErr.message ? verifyErr.message : verifyErr);
-      // Continue to attempt send to capture send errors too
-    }
+  let lastErrorMessage: string | undefined;
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log("Email sent (messageId):", info.messageId || info.response || "unknown");
-    return true;
-  } catch (error: any) {
-    console.error("Failed to send email:", error && error.message ? error.message : error);
-    return false;
+  // Try SMTP first if credentials present
+  if (smtpUser && smtpPass) {
+    try {
+      try {
+        await transporter.verify();
+        console.log("SMTP connection verified");
+      } catch (verifyErr: any) {
+        lastErrorMessage = verifyErr && verifyErr.message ? String(verifyErr.message) : String(verifyErr);
+        console.error("SMTP verify failed:", lastErrorMessage);
+      }
+
+      const info = await transporter.sendMail(mailOptions);
+      console.log("Email sent via SMTP (messageId):", info.messageId || info.response || "unknown");
+      return { ok: true, via: "smtp" };
+    } catch (error: any) {
+      lastErrorMessage = error && error.message ? String(error.message) : String(error);
+      console.error("Failed to send email via SMTP:", lastErrorMessage);
+    }
   }
+
+  // If SMTP failed or wasn't configured, try SendGrid if API key is present
+  const sendgridApiKey = process.env.SENDGRID_API_KEY;
+  if (sendgridApiKey) {
+    try {
+      // dynamic import to avoid top-level dependency issues
+      const sg = (await import("@sendgrid/mail")).default;
+      sg.setApiKey(sendgridApiKey);
+
+      const msg = {
+        from: smtpUser || process.env.SENDGRID_FROM || (process.env.RECIPIENT_EMAIL || RECIPIENT_EMAIL),
+        to: RECIPIENT_EMAIL,
+        replyTo: data.email,
+        subject: `New Inquiry: ${data.projectType} - ${data.name}`,
+        text: emailContent,
+      };
+
+      const [response] = await sg.send(msg as any);
+      console.log("Email sent via SendGrid, status:", response && response.statusCode);
+      return { ok: true, via: "sendgrid" };
+    } catch (sgErr: any) {
+      lastErrorMessage = sgErr && sgErr.message ? String(sgErr.message) : String(sgErr);
+      console.error("Failed to send via SendGrid:", lastErrorMessage);
+    }
+  }
+
+  return { ok: false, error: lastErrorMessage };
 }
