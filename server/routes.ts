@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertContactSchema } from "@shared/schema";
 import { z } from "zod";
-import { sendContactEmail } from "./email";
+import { sendContactEmail, getLastEmailError } from "./email";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -159,6 +159,17 @@ export async function registerRoutes(
       });
     } catch (err) {
       console.error("_email_status error:", err);
+      res.status(500).json({ ok: false });
+    }
+  });
+
+  // Small diagnostic endpoint exposing the last email error (non-sensitive)
+  app.get("/api/_email_last", async (_req, res) => {
+    try {
+      const last = getLastEmailError();
+      res.json({ lastError: last });
+    } catch (err) {
+      console.error("_email_last error:", err);
       res.status(500).json({ ok: false });
     }
   });

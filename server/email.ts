@@ -158,5 +158,24 @@ This message was sent from your portfolio contact form.`.trim();
     }
   }
 
+  // Persist last error message in module scope for safe diagnostics
+  exportLastEmailError(lastErrorMessage);
+
   return { ok: false, error: lastErrorMessage };
+}
+
+// Module-scoped storage for the last email error (non-sensitive)
+let _lastEmailError: string | undefined = undefined;
+
+export function exportLastEmailError(msg?: string | undefined) {
+  if (!msg) {
+    _lastEmailError = undefined;
+    return;
+  }
+  // trim to reasonable length
+  _lastEmailError = String(msg).slice(0, 200);
+}
+
+export function getLastEmailError(): string | undefined {
+  return _lastEmailError;
 }
