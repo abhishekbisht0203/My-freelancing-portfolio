@@ -54,6 +54,7 @@ export function ContactSection() {
       return apiRequest("POST", "/api/contact", data);
     },
     onSuccess: () => {
+      console.log("Contact API success");
       setIsSubmitted(true);
       toast({
         title: "Message sent!",
@@ -61,6 +62,7 @@ export function ContactSection() {
       });
     },
     onError: () => {
+      console.error("Contact API error");
       toast({
         title: "Something went wrong",
         description: "Please try again or email me directly.",

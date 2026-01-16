@@ -12,17 +12,35 @@ export async function registerRoutes(
   app.post("/api/contact", async (req, res) => {
     try {
       const validatedData = insertContactSchema.parse(req.body);
-      const submission = await storage.createContactSubmission(validatedData);
-      
-      await sendContactEmail({
+
+      // Log received submission (non-sensitive)
+      console.log("Contact submission received:", {
         name: validatedData.name,
         email: validatedData.email,
-        phone: validatedData.phone,
         projectType: validatedData.projectType,
-        budget: validatedData.budget,
-        message: validatedData.message,
       });
-      
+
+      const submission = await storage.createContactSubmission(validatedData);
+
+      let emailSent = false;
+      try {
+        emailSent = await sendContactEmail({
+          name: validatedData.name,
+          email: validatedData.email,
+          phone: validatedData.phone,
+          projectType: validatedData.projectType,
+          budget: validatedData.budget,
+          message: validatedData.message,
+        });
+      } catch (sendErr) {
+        console.error("sendContactEmail threw an error:", sendErr);
+      }
+
+      if (!emailSent) {
+        console.error("Email not sent for submission id:", submission.id);
+        return res.status(500).json({ success: false, message: "Submission saved but failed to send notification email" });
+      }
+
       res.status(201).json({ success: true, id: submission.id });
     } catch (error) {
       if (error instanceof z.ZodError) {

@@ -12,6 +12,11 @@ export async function apiRequest(
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  // Log outgoing request for debugging in production (non-sensitive)
+  try {
+    console.debug(`apiRequest ${method} ${url}`);
+  } catch {}
+
   const res = await fetch(url, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
@@ -19,7 +24,13 @@ export async function apiRequest(
     credentials: "include",
   });
 
-  await throwIfResNotOk(res);
+  if (!res.ok) {
+    // attempt to read body for debug then rethrow
+    const text = await res.text().catch(() => res.statusText);
+    console.error(`API error ${method} ${url} -> ${res.status}:`, text);
+    throw new Error(`${res.status}: ${text}`);
+  }
+
   return res;
 }
 
