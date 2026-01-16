@@ -52,31 +52,35 @@ app.use((req, res, next) => {
 });
 
 /* -------- CORS (simple) -------- */
-app.use((req, res, next) => {
+{
   const raw = process.env.ALLOWED_ORIGINS || "*";
   const allowed = raw.split(",").map((s) => s.trim()).filter(Boolean);
-  const origin = req.headers.origin as string | undefined;
+  const allowedAll = allowed.includes("*");
 
-  // Non-sensitive log about CORS configuration
+  // Log CORS configuration once at startup (avoid per-request spam)
   if (!process.env.ALLOWED_ORIGINS) {
     console.log("CORS: no ALLOWED_ORIGINS set, allowing all origins (for dev). Set ALLOWED_ORIGINS in Render for production.");
   } else {
     console.log("CORS allowed origins:", allowed.join(","));
   }
 
-  if (allowed.includes("*") || (origin && allowed.includes(origin))) {
-    res.setHeader("Access-Control-Allow-Origin", allowed.includes("*") ? "*" : origin || "*");
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-  }
+  app.use((req, res, next) => {
+    const origin = req.headers.origin as string | undefined;
 
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
+    if (allowedAll || (origin && allowed.includes(origin))) {
+      res.setHeader("Access-Control-Allow-Origin", allowedAll ? "*" : origin || "*");
+      res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+    }
 
-  next();
-});
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(204);
+    }
+
+    next();
+  });
+}
 
 /* -------- App start -------- */
 (async () => {
