@@ -33,15 +33,22 @@ export async function registerRoutes(
 
       if (!sendResult.ok) {
         console.error("Email not sent for submission id:", submission.id, "error:", sendResult.error || "unknown");
-        return res.status(502).json({
-          success: false,
-          message: "Submission saved but failed to send notification email",
+
+        // Don't surface an HTTP error to the user when email delivery fails
+        // (managed hosts often block outbound SMTP). Save the submission and
+        // return success so the frontend button doesn't show a failure.
+        return res.status(201).json({
+          success: true,
+          id: submission.id,
+          emailSent: false,
+          message: "Submission saved; email delivery failed",
           details: sendResult.error ? String(sendResult.error).slice(0, 200) : undefined,
           via: sendResult.via,
         });
       }
 
-      res.status(201).json({ success: true, id: submission.id, via: sendResult.via });
+      // Email sent successfully
+      res.status(201).json({ success: true, id: submission.id, emailSent: true, via: sendResult.via });
     } catch (error) {
       if (error instanceof z.ZodError) {
         res.status(400).json({ error: "Invalid form data", details: error.errors });
