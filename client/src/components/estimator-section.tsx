@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Calculator, Sparkles, Clock, IndianRupee, Loader2, AlertCircle } from "lucide-react";
+import { Calculator, Sparkles, Clock, Loader2, AlertCircle } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -274,26 +274,25 @@ export function EstimatorSection() {
                 {estimateMutation.isSuccess && estimateMutation.data && (
                   <div className="space-y-6">
                     <div className="text-center p-6 rounded-lg bg-primary/5 border border-primary/10">
-                      <div className="flex items-center justify-center gap-1 text-3xl font-bold text-primary mb-1">
-                        <IndianRupee className="w-6 h-6" />
-                        {estimateMutation.data.price.toLocaleString("en-IN")}
+                      <div className="text-2xl font-bold text-primary mb-1">
+                        Custom Quote
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        Estimated cost
+                        Based on your requirements
                       </div>
                     </div>
 
                     <div className="flex items-center justify-center gap-2 p-4 rounded-lg bg-muted">
                       <Clock className="w-5 h-5 text-muted-foreground" />
-                      <span className="font-medium">{estimateMutation.data.days} days</span>
+                      <span className="font-medium">~{estimateMutation.data.days} days</span>
                       <span className="text-sm text-muted-foreground">
                         estimated timeline
                       </span>
                     </div>
 
                     <p className="text-sm text-muted-foreground text-center">
-                      This is a rough estimate. Final pricing depends on detailed
-                      requirements discussion.
+                      Pricing is flexible and depends on your specific needs. 
+                      Let's discuss your project and find a solution that works for you.
                     </p>
 
                     <Button
@@ -302,7 +301,7 @@ export function EstimatorSection() {
                       onClick={scrollToContact}
                       data-testid="button-get-exact-quote"
                     >
-                      Get Exact Quote
+                      Let's Discuss Pricing
                     </Button>
                   </div>
                 )}

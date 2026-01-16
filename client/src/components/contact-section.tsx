@@ -29,11 +29,12 @@ const projectTypes = [
 ];
 
 const budgetRanges = [
-  "Under ₹50,000",
-  "₹50,000 - ₹1,00,000",
-  "₹1,00,000 - ₹3,00,000",
-  "₹3,00,000 - ₹5,00,000",
-  "Above ₹5,00,000",
+  "Under $1,000",
+  "$1,000 - $3,000",
+  "$3,000 - $5,000",
+  "$5,000 - $10,000",
+  "Above $10,000",
+  "Let's Discuss",
 ];
 
 export function ContactSection() {
