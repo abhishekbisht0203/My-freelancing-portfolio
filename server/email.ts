@@ -15,12 +15,16 @@ export async function sendContactEmail(data: ContactEmailData): Promise<boolean>
   const gmailUser = process.env.GMAIL_USER;
   const gmailAppPassword = process.env.GMAIL_APP_PASSWORD;
 
+  // Check if environment variables exist
   if (!gmailUser || !gmailAppPassword) {
-    console.log("Email credentials not configured. Skipping email send.");
-    console.log("Contact form submission received:", data);
+    console.error(
+      "Email credentials not configured! Please set GMAIL_USER and GMAIL_APP_PASSWORD in Render Environment Variables."
+    );
+    console.log("Contact form data received:", data);
     return false;
   }
 
+  // Create transporter for Gmail
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
@@ -64,11 +68,11 @@ Reply directly to this email to respond to the client.
   };
 
   try {
-    await transporter.sendMail(mailOptions);
-    console.log("Email sent successfully to", RECIPIENT_EMAIL);
+    const info = await transporter.sendMail(mailOptions);
+    console.log("✅ Email sent successfully:", info.response);
     return true;
-  } catch (error) {
-    console.error("Failed to send email:", error);
+  } catch (error: any) {
+    console.error("❌ Failed to send email:", error.message || error);
     return false;
   }
 }
