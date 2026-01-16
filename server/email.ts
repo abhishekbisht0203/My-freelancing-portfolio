@@ -17,14 +17,33 @@ function getEnvFlag(name: string) {
   return v === "true" || v === "1";
 }
 
+function normalizeEnvValue(v?: string | undefined) {
+  if (v === undefined) return undefined;
+  return v.trim();
+}
+
+function normalizePassword(v?: string | undefined) {
+  if (!v) return v;
+  const trimmed = v.trim();
+  if (trimmed.includes(" ")) {
+    const noSpaces = trimmed.replace(/\s+/g, "");
+    // If removing spaces yields a plausible 16-char App Password, use it.
+    if (noSpaces.length === 16) {
+      console.log("Detected grouped SMTP password; stripping whitespace for authentication.");
+      return noSpaces;
+    }
+  }
+  return trimmed;
+}
+
 export type SendResult = { ok: boolean; via?: "smtp" | "sendgrid"; error?: string };
 
 export async function sendContactEmail(data: ContactEmailData): Promise<SendResult> {
   // Support multiple env var names (SMTP_* preferred, fallback to GMAIL_*)
-  const smtpUser = process.env.SMTP_EMAIL || process.env.SMTP_USER || process.env.GMAIL_USER;
-  const smtpPass = process.env.SMTP_PASSWORD || process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD;
-  const host = process.env.SMTP_HOST || "smtp.gmail.com";
-  const port = Number(process.env.SMTP_PORT || "587");
+  const smtpUser = normalizeEnvValue(process.env.SMTP_EMAIL || process.env.SMTP_USER || process.env.GMAIL_USER);
+  const smtpPass = normalizePassword(process.env.SMTP_PASSWORD || process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD);
+  const host = normalizeEnvValue(process.env.SMTP_HOST || "smtp.gmail.com") as string;
+  const port = Number(normalizeEnvValue(process.env.SMTP_PORT || "587"));
   const secure = getEnvFlag("SMTP_SECURE") ?? port === 465;
 
   // Minimal non-sensitive logging about config
@@ -88,9 +107,36 @@ This message was sent from your portfolio contact form.`.trim();
 
   let lastErrorMessage: string | undefined;
 
-  // Try SMTP first if credentials present
+  // If SendGrid API key exists, prefer it to avoid SMTP network timeouts on managed platforms
+  const sendgridApiKey = process.env.SENDGRID_API_KEY;
+  if (sendgridApiKey) {
+    try {
+      console.log("Attempting to send email via SendGrid (preferred)");
+      const sg = (await import("@sendgrid/mail")).default;
+      sg.setApiKey(sendgridApiKey);
+
+      const msg = {
+        from: process.env.SENDGRID_FROM || smtpUser || (process.env.RECIPIENT_EMAIL || RECIPIENT_EMAIL),
+        to: RECIPIENT_EMAIL,
+        replyTo: data.email,
+        subject: `New Inquiry: ${data.projectType} - ${data.name}`,
+        text: emailContent,
+      };
+
+      const [response] = await sg.send(msg as any);
+      console.log("Email sent via SendGrid, status:", response && response.statusCode);
+      return { ok: true, via: "sendgrid" };
+    } catch (sgErr: any) {
+      lastErrorMessage = sgErr && sgErr.message ? String(sgErr.message) : String(sgErr);
+      console.error("Failed to send via SendGrid:", lastErrorMessage);
+      // fall through to SMTP fallback
+    }
+  }
+
+  // Try SMTP if configured (fallback)
   if (smtpUser && smtpPass) {
     try {
+      console.log("Attempting to send email via SMTP (fallback)");
       try {
         await transporter.verify();
         console.log("SMTP connection verified");
@@ -105,31 +151,10 @@ This message was sent from your portfolio contact form.`.trim();
     } catch (error: any) {
       lastErrorMessage = error && error.message ? String(error.message) : String(error);
       console.error("Failed to send email via SMTP:", lastErrorMessage);
-    }
-  }
-
-  // If SMTP failed or wasn't configured, try SendGrid if API key is present
-  const sendgridApiKey = process.env.SENDGRID_API_KEY;
-  if (sendgridApiKey) {
-    try {
-      // dynamic import to avoid top-level dependency issues
-      const sg = (await import("@sendgrid/mail")).default;
-      sg.setApiKey(sendgridApiKey);
-
-      const msg = {
-        from: smtpUser || process.env.SENDGRID_FROM || (process.env.RECIPIENT_EMAIL || RECIPIENT_EMAIL),
-        to: RECIPIENT_EMAIL,
-        replyTo: data.email,
-        subject: `New Inquiry: ${data.projectType} - ${data.name}`,
-        text: emailContent,
-      };
-
-      const [response] = await sg.send(msg as any);
-      console.log("Email sent via SendGrid, status:", response && response.statusCode);
-      return { ok: true, via: "sendgrid" };
-    } catch (sgErr: any) {
-      lastErrorMessage = sgErr && sgErr.message ? String(sgErr.message) : String(sgErr);
-      console.error("Failed to send via SendGrid:", lastErrorMessage);
+      // If this looks like a network timeout, add a hint for the user (non-sensitive)
+      if (/timeout|ETIMEDOUT|EAI_AGAIN|Connection timed out/i.test(lastErrorMessage || "")) {
+        console.error("SMTP connection timed out — managed hosts often block outbound SMTP. Consider setting SENDGRID_API_KEY in your Render environment to use an API-based mailer.");
+      }
     }
   }
 
