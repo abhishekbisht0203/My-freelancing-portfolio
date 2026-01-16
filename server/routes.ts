@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertContactSchema } from "@shared/schema";
 import { z } from "zod";
+import { sendContactEmail } from "./email";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -12,6 +13,16 @@ export async function registerRoutes(
     try {
       const validatedData = insertContactSchema.parse(req.body);
       const submission = await storage.createContactSubmission(validatedData);
+      
+      await sendContactEmail({
+        name: validatedData.name,
+        email: validatedData.email,
+        phone: validatedData.phone,
+        projectType: validatedData.projectType,
+        budget: validatedData.budget,
+        message: validatedData.message,
+      });
+      
       res.status(201).json({ success: true, id: submission.id });
     } catch (error) {
       if (error instanceof z.ZodError) {
